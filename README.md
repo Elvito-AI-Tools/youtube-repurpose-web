@@ -24,12 +24,6 @@ This guide will help you set up the YouTube Repurpose Web App without requiring 
 6. ⏱️ Wait for deployment to complete (about 1-2 minutes)
 7. 🎉 When finished, Vercel will provide you with a URL to your app (e.g., `your-app-name.vercel.app`)
 
-### Step 3: Configure Your Webhook
-
-1. 🌐 Visit your newly deployed app
-2. ⚙️ Click the "**Settings**" button
-3. 📋 Enter your n8n webhook URL from Workflow 2
-4. 💾 Click "**Save Settings**"
 
 ## 💻 Option 2: Local Installation
 
