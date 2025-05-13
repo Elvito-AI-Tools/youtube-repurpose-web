@@ -18,6 +18,8 @@ export interface SavedClip {
   thumbnail: string;
   originalUrl: string;
   createdAt: Date;
+  caption?: string;
+  // scheduleTime?: Date;
 }
 
 export default function Home() {

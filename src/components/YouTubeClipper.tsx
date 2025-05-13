@@ -13,45 +13,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { SavedClip } from "@/app/page";
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from "sonner";
-
-// YouTube API type declarations
-declare global {
-  interface Window {
-    YT: {
-      Player: new (
-        elementId: HTMLDivElement | string,
-        options: {
-          videoId: string;
-          playerVars?: {
-            autoplay?: number;
-            controls?: number;
-            disablekb?: number;
-            enablejsapi?: number;
-            modestbranding?: number;
-            rel?: number;
-          };
-          events?: {
-            onReady?: (event: any) => void;
-            onStateChange?: (event: any) => void;
-          };
-        }
-      ) => {
-        destroy: () => void;
-        getCurrentTime: () => number;
-        getDuration: () => number;
-        seekTo: (seconds: number, allowSeekAhead: boolean) => void;
-        playVideo: () => void;
-        pauseVideo: () => void;
-      };
-      PlayerState: {
-        PLAYING: number;
-        PAUSED: number;
-        ENDED: number;
-      };
-    };
-    onYouTubeIframeAPIReady: () => void;
-  }
-}
+import { formatTime } from "./video/utils";
+import { DateTimePicker } from "./ui/datetime-picker";
 
 const formSchema = z.object({
   youtubeUrl: z
@@ -96,7 +59,8 @@ export default function YouTubeClipper({ onVideoLoad, onSaveClip }: YouTubeClipp
   const playerRef = useRef<any>(null);
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const [clipTitle, setClipTitle] = useState("");
-
+  const [clipCaption, setClipCaption] = useState("");
+  
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -203,13 +167,6 @@ export default function YouTubeClipper({ onVideoLoad, onSaveClip }: YouTubeClipp
     return () => clearInterval(interval);
   }, [startTime, endTime, isPlaying]);
 
-  // Format seconds to MM:SS
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
-
   const playSelectedSegment = () => {
     if (playerRef.current) {
       playerRef.current.seekTo(startTime, true);
@@ -284,37 +241,54 @@ export default function YouTubeClipper({ onVideoLoad, onSaveClip }: YouTubeClipp
     
     setIsLoadingClips(true);
     try {
-      const response = await fetch("http://127.0.0.1:5678/webhook-test/aff93e6a-399a-4719-bf6e-a7247db71f75", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          videoId,
-          duration,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch clips');
-      }
-
-      const clips: Clip[] = await response.json();
-      setSuggestedClips(clips);
+      // Here you would implement your own logic to find best clips
+      // For now, we'll just show a message
+      toast.info("This feature is not implemented yet");
+      setIsLoadingClips(false);
     } catch (error) {
-      console.error('Error fetching clips:', error);
-    } finally {
+      console.error('Error finding clips:', error);
+      toast.error("Failed to find clips");
       setIsLoadingClips(false);
     }
   };
 
+  const saveCurrentClip = () => {
+    if (!videoId || !onSaveClip) return;
+    
+    // Create a new saved clip object
+    const newClip: SavedClip = {
+      id: uuidv4(),
+      videoId,
+      title: clipTitle || `Clip ${formatTime(startTime)}-${formatTime(endTime)}`,
+      start: startTime,
+      end: endTime,
+      thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+      originalUrl,
+      createdAt: new Date(),
+      caption: clipCaption,
+    };
+    
+    // Call the parent's onSaveClip function
+    onSaveClip(newClip);
+    
+    // Show success toast
+    toast.success("Clip saved successfully!", {
+      description: `Your clip "${newClip.title}" has been added to My Clips.`,
+    });
+    
+    // Reset the clip title, caption and schedule time
+    setClipTitle("");
+    setClipCaption("");
+  };
+  
+  // Add back the selectClip function
   const selectClip = (clip: Clip) => {
     setStartTime(clip.start);
     setEndTime(clip.end);
     setClipDuration(clip.end - clip.start);
   };
-
-  // Add this inside the return statement, after the slider component
+  
+  // Add back the renderClipMarkers function
   const renderClipMarkers = () => {
     if (!duration || !suggestedClips.length) return null;
 
@@ -347,34 +321,6 @@ export default function YouTubeClipper({ onVideoLoad, onSaveClip }: YouTubeClipp
         </TooltipProvider>
       );
     });
-  };
-
-  // Add this function to save the current clip
-  const saveCurrentClip = () => {
-    if (!videoId || !onSaveClip) return;
-    
-    // Create a new saved clip object
-    const newClip: SavedClip = {
-      id: uuidv4(),
-      videoId,
-      title: clipTitle || `Clip ${formatTime(startTime)}-${formatTime(endTime)}`,
-      start: startTime,
-      end: endTime,
-      thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-      originalUrl,
-      createdAt: new Date(),
-    };
-    
-    // Call the parent's onSaveClip function
-    onSaveClip(newClip);
-    
-    // Show success toast
-    toast.success("Clip saved successfully!", {
-      description: `Your clip "${newClip.title}" has been added to My Clips.`,
-    });
-    
-    // Reset the clip title
-    setClipTitle("");
   };
 
   return (
@@ -500,14 +446,24 @@ export default function YouTubeClipper({ onVideoLoad, onSaveClip }: YouTubeClipp
                 />
               </div>
               
-              <div className="flex space-x-2">
-                <Button 
-                  onClick={saveCurrentClip} 
-                  className="yt-clipper-button flex-1"
-                >
-                  Save to My Clips
-                </Button>
+              <div>
+                <label className="text-sm text-gray-600 dark:text-gray-400 mb-1 block">
+                  Caption
+                </label>
+                <Input
+                  value={clipCaption}
+                  onChange={(e) => setClipCaption(e.target.value)}
+                  placeholder="Add a caption for this clip"
+                  className="bg-white dark:bg-[#1E1E1E] border-gray-200 dark:border-[#333333] text-black dark:text-white"
+                />
               </div>
+              
+              <Button 
+                onClick={saveCurrentClip} 
+                className="yt-clipper-button w-full"
+              >
+                Save to My Clips
+              </Button>
             </div>
           </div>
 

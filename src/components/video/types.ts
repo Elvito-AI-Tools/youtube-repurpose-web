@@ -28,6 +28,7 @@ declare global {
             iv_load_policy?: number;
             playsinline?: number;
             mute?: number;
+            start?: number;
           };
           events?: {
             onReady?: (event: any) => void;

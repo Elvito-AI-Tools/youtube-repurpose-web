@@ -11,12 +11,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Trash2, Download, Save } from "lucide-react";
+import { Trash2, Save } from "lucide-react";
 import { VideoPlayer } from "./video/VideoPlayer";
 import { VideoSettings } from "./video/VideoSettings";
 import { ClipSettings } from "./video/types";
 import { formatTime } from "./video/utils";
 import { toast } from "sonner";
+import { WebhookUrlModal } from "./WebhookUrlModal";
+import { getWebhookUrl, saveWebhookUrl } from "@/lib/webhookStore";
+import { Input } from "./ui/input";
+// import { DateTimePicker } from "./ui/datetime-picker";
 
 interface SavedClipsProps {
   clips: SavedClip[];
@@ -27,6 +31,9 @@ export default function SavedClips({ clips, onRemoveClip }: SavedClipsProps) {
   const [mounted, setMounted] = useState(false);
   const [clipSettings, setClipSettings] = useState<Record<string, ClipSettings>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isWebhookModalOpen, setIsWebhookModalOpen] = useState(false);
+  const [clipCaptions, setClipCaptions] = useState<Record<string, string>>({});
+  // const [clipScheduleTimes, setClipScheduleTimes] = useState<Record<string, Date | null>>({});
 
   // Only initialize on the client side
   useEffect(() => {
@@ -34,11 +41,37 @@ export default function SavedClips({ clips, onRemoveClip }: SavedClipsProps) {
     
     // Initialize settings for all clips
     const initialSettings: Record<string, ClipSettings> = {};
+    const initialCaptions: Record<string, string> = {};
+    // const initialScheduleTimes: Record<string, Date | null> = {};
+    
     clips.forEach(clip => {
       initialSettings[clip.id] = getDefaultSettings();
+      initialCaptions[clip.id] = clip.caption || '';
+      // initialScheduleTimes[clip.id] = clip.scheduleTime || null;
     });
+    
     setClipSettings(initialSettings);
+    setClipCaptions(initialCaptions);
+    // setClipScheduleTimes(initialScheduleTimes);
   }, []);
+
+  // Update captions and schedule times when clips change
+  useEffect(() => {
+    const updatedCaptions: Record<string, string> = { ...clipCaptions };
+    // const updatedScheduleTimes: Record<string, Date | null> = { ...clipScheduleTimes };
+    
+    clips.forEach(clip => {
+      if (!updatedCaptions[clip.id]) {
+        updatedCaptions[clip.id] = clip.caption || '';
+      }
+      // if (!updatedScheduleTimes[clip.id]) {
+      //   updatedScheduleTimes[clip.id] = clip.scheduleTime || null;
+      // }
+    });
+    
+    setClipCaptions(updatedCaptions);
+    // setClipScheduleTimes(updatedScheduleTimes);
+  }, [clips]);
 
   const getDefaultSettings = (): ClipSettings => ({
     aspectRatio: "original",
@@ -72,8 +105,40 @@ export default function SavedClips({ clips, onRemoveClip }: SavedClipsProps) {
     });
   };
 
-  // New function to save all clips to the webhook
-  const saveAllClips = async () => {
+  const handleCaptionChange = (clipId: string, caption: string) => {
+    setClipCaptions(prev => ({
+      ...prev,
+      [clipId]: caption
+    }));
+  };
+
+  // const handleScheduleTimeChange = (clipId: string, date: Date | null) => {
+  //   setClipScheduleTimes(prev => ({
+  //     ...prev,
+  //     [clipId]: date
+  //   }));
+  // };
+
+  // Function to open the webhook modal
+  const openSaveAllClipsModal = () => {
+    if (clips.length === 0) {
+      toast.error("No clips to save");
+      return;
+    }
+    setIsWebhookModalOpen(true);
+  };
+
+  // Function to handle webhook URL submission
+  const handleWebhookSubmit = async (url: string) => {
+    // Save the webhook URL for future use
+    saveWebhookUrl('saveAllClips', url);
+    
+    // Call the function to save all clips with the provided URL
+    await saveAllClipsWithWebhook(url);
+  };
+
+  // New function to save all clips with the provided webhook URL
+  const saveAllClipsWithWebhook = async (webhookUrl: string) => {
     if (clips.length === 0) {
       toast.error("No clips to save");
       return;
@@ -88,11 +153,13 @@ export default function SavedClips({ clips, onRemoveClip }: SavedClipsProps) {
         aspectRatio: getSettings(clip.id).aspectRatio,
         youtubeURL: clip.originalUrl,
         videoId: clip.videoId,
-        title: clip.title
+        title: clip.title,
+        caption: clipCaptions[clip.id] || '', // Include caption in the webhook data
+        // scheduleTime: clipScheduleTimes[clip.id] || undefined // Include schedule time
       }));
 
       // Call the webhook with all clips data
-      const response = await fetch("http://127.0.0.1:5678/webhook-test/3aa575e6-5c42-46df-9bd3-505c724c12ff", {
+      const response = await fetch(webhookUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -110,7 +177,7 @@ export default function SavedClips({ clips, onRemoveClip }: SavedClipsProps) {
     } catch (error) {
       console.error('Error saving clips:', error);
       toast.error("Failed to save clips", {
-        description: "Please try again later."
+        description: "Please check the webhook URL and try again."
       });
     } finally {
       setIsSaving(false);
@@ -135,6 +202,16 @@ export default function SavedClips({ clips, onRemoveClip }: SavedClipsProps) {
 
   return (
     <div>
+      {/* Webhook URL Modal */}
+      <WebhookUrlModal
+        isOpen={isWebhookModalOpen}
+        onClose={() => setIsWebhookModalOpen(false)}
+        onSubmit={handleWebhookSubmit}
+        title="Save All Clips Webhook"
+        description="Enter the webhook URL to save all clips."
+        defaultUrl={getWebhookUrl('saveAllClips')}
+      />
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold mb-2">My Clips</h2>
@@ -144,7 +221,7 @@ export default function SavedClips({ clips, onRemoveClip }: SavedClipsProps) {
         </div>
         <Button
           className="bg-[#97D700] text-[#121212] hover:bg-[#85bd00]"
-          onClick={saveAllClips}
+          onClick={openSaveAllClipsModal}
           disabled={isSaving}
         >
           <Save className="h-4 w-4 mr-2" />
@@ -163,6 +240,13 @@ export default function SavedClips({ clips, onRemoveClip }: SavedClipsProps) {
                 <CardDescription className="text-gray-500 dark:text-gray-400">
                   {formatTime(clip.start)} - {formatTime(clip.end)}
                 </CardDescription>
+                {/* {clipScheduleTimes[clip.id] && (
+                  <div className="mt-1 flex items-center text-[#97D700]">
+                    <span className="text-xs">
+                      Scheduled: {clipScheduleTimes[clip.id]?.toLocaleDateString()} at {clipScheduleTimes[clip.id]?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </span>
+                  </div>
+                )} */}
               </CardHeader>
               <CardContent className="p-4 pt-2">
                 <div className="flex flex-col gap-6">
@@ -173,6 +257,39 @@ export default function SavedClips({ clips, onRemoveClip }: SavedClipsProps) {
                         settings={settings}
                         onSettingsChange={(updates) => updateSettings(clip.id, updates)}
                       />
+
+                      {/* Caption Input */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Caption
+                        </label>
+                        <Input
+                          value={clipCaptions[clip.id] || ''}
+                          onChange={(e) => handleCaptionChange(clip.id, e.target.value)}
+                          placeholder="Add a caption for this clip"
+                          className="bg-white dark:bg-[#1E1E1E] border-gray-200 dark:border-[#333333] text-black dark:text-white"
+                        />
+                      </div>
+
+                      {/* Schedule Time Picker - Removed */}
+                      {/* <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Schedule Time
+                        </label>
+                        <div className="relative">
+                          <DateTimePicker
+                            selected={clipScheduleTimes[clip.id] || null}
+                            onChange={(date) => handleScheduleTimeChange(clip.id, date)}
+                            className="bg-white dark:bg-[#1E1E1E] border-gray-200 dark:border-[#333333] text-black dark:text-white"
+                            placeholder="Select when to publish this clip"
+                          />
+                          {clipScheduleTimes[clip.id] && (
+                            <div className="absolute right-0 top-0 h-2 w-2 translate-x-1/2 -translate-y-1/2">
+                              <div className="animate-pulse h-2 w-2 rounded-full bg-[#97D700]"></div>
+                            </div>
+                          )}
+                        </div>
+                      </div> */}
 
                       <VideoSettings
                         clipId={clip.id}
