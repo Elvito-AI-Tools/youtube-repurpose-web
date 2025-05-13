@@ -102,16 +102,10 @@ export function VideoPlayer({ clip, settings, onSettingsChange }: VideoPlayerPro
           
           // Only update the settings time if it's significantly different (to reduce updates)
           if (Math.abs(time - playbackSettings.currentTime) > 0.5) {
-            // Preserve ALL current settings, including aspect ratio
-            const updatedSettings = {
-              ...settings,
+            // Only update currentTime, not aspectRatio
+            onSettingsChange({
               currentTime: time,
-            };
-            // Ensure we're not accidentally resetting any values
-            if (settings.aspectRatio) {
-              updatedSettings.aspectRatio = settings.aspectRatio;
-            }
-            onSettingsChange(updatedSettings);
+            });
           }
         }
 
@@ -121,7 +115,6 @@ export function VideoPlayer({ clip, settings, onSettingsChange }: VideoPlayerPro
           playerRef.current.pauseVideo();
           setPlayerCurrentTime(clip.start);
           onSettingsChange({ 
-            ...settings,
             isPlaying: false, 
             currentTime: clip.start,
           });
@@ -205,11 +198,11 @@ export function VideoPlayer({ clip, settings, onSettingsChange }: VideoPlayerPro
       playerRef.current.pauseVideo();
     }
     
+    // Only update isPlaying, not aspectRatio
     onSettingsChange({ 
-      ...settings, // Preserve ALL current settings
       isPlaying: newIsPlaying,
     });
-  }, [playerReady, playbackSettings.isPlaying, settings]);
+  }, [playerReady, playbackSettings.isPlaying]);
 
   const handleSeek = useCallback((time: number) => {
     if (!playerRef.current || !playerReady) return;
@@ -218,22 +211,16 @@ export function VideoPlayer({ clip, settings, onSettingsChange }: VideoPlayerPro
     playerRef.current.seekTo(time, true);
     setPlayerCurrentTime(time);
     
-    // Ensure we preserve ALL settings, especially aspect ratio
-    const updatedSettings = {
-      ...settings,
+    // Only update currentTime, not aspectRatio
+    onSettingsChange({
       currentTime: time,
-    };
-    // Double-check aspect ratio is preserved
-    if (settings.aspectRatio) {
-      updatedSettings.aspectRatio = settings.aspectRatio;
-    }
-    onSettingsChange(updatedSettings);
+    });
     
     // Reset the seeking flag after a short delay
     setTimeout(() => {
       isSeeking.current = false;
     }, 100);
-  }, [playerReady, settings]);
+  }, [playerReady]);
 
   const handleReset = useCallback(() => {
     if (!playerRef.current || !playerReady) return;
@@ -243,8 +230,8 @@ export function VideoPlayer({ clip, settings, onSettingsChange }: VideoPlayerPro
     playerRef.current.pauseVideo();
     setPlayerCurrentTime(clip.start);
     
+    // Only update isPlaying and currentTime, not aspectRatio
     onSettingsChange({ 
-      ...settings, // Preserve ALL current settings
       isPlaying: false, 
       currentTime: clip.start,
     });
@@ -253,7 +240,7 @@ export function VideoPlayer({ clip, settings, onSettingsChange }: VideoPlayerPro
     setTimeout(() => {
       isSeeking.current = false;
     }, 100);
-  }, [clip.start, playerReady, settings]);
+  }, [clip.start, playerReady]);
 
   // Calculate progress with safety checks
   const duration = Math.max(0.1, clip.end - clip.start);

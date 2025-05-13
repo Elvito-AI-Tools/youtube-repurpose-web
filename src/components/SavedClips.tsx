@@ -30,6 +30,7 @@ interface SavedClipsProps {
 export default function SavedClips({ clips, onRemoveClip }: SavedClipsProps) {
   const [mounted, setMounted] = useState(false);
   const [clipSettings, setClipSettings] = useState<Record<string, ClipSettings>>({});
+  const [clipAspectRatios, setClipAspectRatios] = useState<Record<string, ClipSettings['aspectRatio']>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isWebhookModalOpen, setIsWebhookModalOpen] = useState(false);
   const [clipCaptions, setClipCaptions] = useState<Record<string, string>>({});
@@ -42,27 +43,34 @@ export default function SavedClips({ clips, onRemoveClip }: SavedClipsProps) {
     // Initialize settings for all clips
     const initialSettings: Record<string, ClipSettings> = {};
     const initialCaptions: Record<string, string> = {};
+    const initialAspectRatios: Record<string, ClipSettings['aspectRatio']> = {};
     // const initialScheduleTimes: Record<string, Date | null> = {};
     
     clips.forEach(clip => {
       initialSettings[clip.id] = getDefaultSettings();
       initialCaptions[clip.id] = clip.caption || '';
+      initialAspectRatios[clip.id] = 'original';
       // initialScheduleTimes[clip.id] = clip.scheduleTime || null;
     });
     
     setClipSettings(initialSettings);
     setClipCaptions(initialCaptions);
+    setClipAspectRatios(initialAspectRatios);
     // setClipScheduleTimes(initialScheduleTimes);
   }, []);
 
-  // Update captions and schedule times when clips change
+  // Update captions and aspect ratios when clips change
   useEffect(() => {
     const updatedCaptions: Record<string, string> = { ...clipCaptions };
+    const updatedAspectRatios: Record<string, ClipSettings['aspectRatio']> = { ...clipAspectRatios };
     // const updatedScheduleTimes: Record<string, Date | null> = { ...clipScheduleTimes };
     
     clips.forEach(clip => {
       if (!updatedCaptions[clip.id]) {
         updatedCaptions[clip.id] = clip.caption || '';
+      }
+      if (!updatedAspectRatios[clip.id]) {
+        updatedAspectRatios[clip.id] = 'original';
       }
       // if (!updatedScheduleTimes[clip.id]) {
       //   updatedScheduleTimes[clip.id] = clip.scheduleTime || null;
@@ -70,6 +78,7 @@ export default function SavedClips({ clips, onRemoveClip }: SavedClipsProps) {
     });
     
     setClipCaptions(updatedCaptions);
+    setClipAspectRatios(updatedAspectRatios);
     // setClipScheduleTimes(updatedScheduleTimes);
   }, [clips]);
 
@@ -83,26 +92,47 @@ export default function SavedClips({ clips, onRemoveClip }: SavedClipsProps) {
   });
 
   const getSettings = (clipId: string): ClipSettings => {
-    return clipSettings[clipId] || getDefaultSettings();
+    const baseSettings = clipSettings[clipId] || getDefaultSettings();
+    // Merge the aspect ratio from separate state
+    return {
+      ...baseSettings,
+      aspectRatio: clipAspectRatios[clipId] || 'original',
+    };
   };
 
   const updateSettings = (clipId: string, updates: Partial<ClipSettings>) => {
-    setClipSettings(prev => ({
-      ...prev,
-      [clipId]: {
-        ...getSettings(clipId),
-        ...updates,
-      },
-    }));
+    // If the update includes aspectRatio, update that separately
+    if (updates.aspectRatio !== undefined) {
+      // Remove aspectRatio from updates to avoid duplication
+      const { aspectRatio, ...otherUpdates } = updates;
+      
+      // Only update clipSettings if there are other updates
+      if (Object.keys(otherUpdates).length > 0) {
+        setClipSettings(prev => ({
+          ...prev,
+          [clipId]: {
+            ...getSettings(clipId),
+            ...otherUpdates,
+          },
+        }));
+      }
+    } else {
+      // No aspectRatio in updates, just update the other settings
+      setClipSettings(prev => ({
+        ...prev,
+        [clipId]: {
+          ...getSettings(clipId),
+          ...updates,
+        },
+      }));
+    }
   };
 
   const handleAspectRatioChange = (clipId: string, ratio: ClipSettings['aspectRatio']) => {
-    updateSettings(clipId, { 
-      aspectRatio: ratio,
-      xPosition: 50,
-      yPosition: 50,
-      zoomLevel: 100
-    });
+    setClipAspectRatios(prev => ({
+      ...prev,
+      [clipId]: ratio
+    }));
   };
 
   const handleCaptionChange = (clipId: string, caption: string) => {
@@ -150,7 +180,7 @@ export default function SavedClips({ clips, onRemoveClip }: SavedClipsProps) {
       const clipsData = clips.map(clip => ({
         start: clip.start,
         end: clip.end,
-        aspectRatio: getSettings(clip.id).aspectRatio,
+        aspectRatio: clipAspectRatios[clip.id] || 'original',
         youtubeURL: clip.originalUrl,
         videoId: clip.videoId,
         title: clip.title,
