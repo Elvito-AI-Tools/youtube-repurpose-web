@@ -1,6 +1,5 @@
 "use client";
 
-import SocialMediaAgent from "@/components/SocialMediaAgent";
 import YouTubeClipper from "@/components/YouTubeClipper";
 import { Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
